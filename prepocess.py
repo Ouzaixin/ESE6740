@@ -1,8 +1,10 @@
 import os
 import pandas as pd
 
-input_csv = "/home/ouzx/ESE6740/dataset/UCBERKELEY_AMY_6MM_24Mar2026.csv"
-output_dir = "/home/ouzx/ESE6740/dataset/"
+curr_dir = os.getcwd()
+# print(curr_dir)
+input_csv = f"{curr_dir}/dataset/UCBERKELEY_AMY_6MM_24Mar2026.csv"
+output_dir = f"{curr_dir}/dataset/"
 os.makedirs(output_dir, exist_ok=True)
 
 PT_ID_COL = "PTID"
