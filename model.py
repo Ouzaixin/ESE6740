@@ -68,10 +68,9 @@ class ROIPositionalEncoding(nn.Module):
         return x + self.pe
 
 class LatentPartition(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim, subtype_dim=4):
         super().__init__()
-
-        self.sub = nn.Linear(dim, dim//32)
+        self.sub = nn.Linear(dim, subtype_dim)
         self.mod = nn.Linear(dim, dim)
 
     def forward(self, z):
@@ -106,21 +105,35 @@ class Decoder(nn.Module):
         return self.net(z)
 
 class AE(nn.Module):
-    def __init__(self, num_rois, latent, dim, beta_mi, beta_ib, dropout_p, num_classes):
+    def __init__(self, num_rois, latent, dim, subtype_dim, beta_mi, beta_ib, dropout_p, num_classes):
         super().__init__()
         self.encoder = Encoder(num_rois * 2, dim, latent, dropout_p=dropout_p)
-        self.partition = LatentPartition(latent)
-
+        # self.partition = LatentPartition(latent)
+        self.partition = LatentPartition(latent, subtype_dim=subtype_dim)
         self.decoder_mod_m = Decoder(latent, dim, num_rois, dropout_p=dropout_p)
         self.decoder_mod_p = Decoder(latent, dim, num_rois, dropout_p=dropout_p)
-        self.decoder_sub_m = Decoder(latent//32, dim, num_rois, dropout_p=dropout_p)
-        self.decoder_sub_p = Decoder(latent//32, dim, num_rois, dropout_p=dropout_p)
-
-        self.cls_sub = nn.Sequential(
-            nn.Linear(latent//32, dim//32),
+        self.decoder_sub_m = Decoder(subtype_dim, dim, num_rois, dropout_p=dropout_p)
+        self.decoder_sub_p = Decoder(subtype_dim, dim, num_rois, dropout_p=dropout_p)
+        
+        self.cls_apoe = nn.Sequential(
+            nn.Linear(subtype_dim, subtype_dim),
             nn.ReLU(),
             nn.Dropout(dropout_p),
-            nn.Linear(dim//32, num_classes)
+            nn.Linear(subtype_dim, 3)
+        )
+
+        self.reg_age = nn.Sequential(
+            nn.Linear(subtype_dim, subtype_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_p),
+            nn.Linear(subtype_dim, 1)
+        )
+
+        self.cls_sub = nn.Sequential(
+            nn.Linear(subtype_dim, subtype_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_p),
+            nn.Linear(subtype_dim, num_classes)
         )
         self.pos_emb = ROIPositionalEncoding(num_rois=num_rois)
         
@@ -149,20 +162,28 @@ class AE(nn.Module):
         pred_m = mod_pred_m + sub_pred_m
         pred_p = mod_pred_p + sub_pred_p
         
-        loss_rec = (F.mse_loss(pred_m, x_m) + F.mse_loss(pred_p, x_p)) / 2
-
+        # loss_rec = (F.mse_loss(pred_m, x_m) + F.mse_loss(pred_p, x_p)) / 2
+        loss_rec_mri = F.mse_loss(pred_m, x_m)
+        loss_rec_pet = F.mse_loss(pred_p, x_p)
+        # loss_rec = (loss_rec_mri + loss_rec_pet) / 2
+        loss_rec = loss_rec_mri + loss_rec_pet
         cls_pred = self.cls_sub(z_sub)
-        loss_cls = F.cross_entropy(cls_pred, y.long())
-
+        loss_cls = F.cross_entropy(cls_pred, y.long(), label_smoothing=0.1)
+        apoe_pred = self.cls_apoe(z_sub)
+        age_pred = self.reg_age(z_sub).squeeze(-1)
         loss = loss_rec + self.beta_ib * loss_cls
 
         return {
             "loss": loss,
             "loss_cls": loss_cls,
             "loss_rec": loss_rec,
+            "loss_rec_mri": loss_rec_mri,
+            "loss_rec_pet": loss_rec_pet,
             "z_sub": z_sub,
             "z_mod": z_mod,
             "latent": latent,
             "reconstruction_m": pred_m,
             "reconstruction_p": pred_p,
+            "apoe_pred": apoe_pred,
+            "age_pred": age_pred,
         }

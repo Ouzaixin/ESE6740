@@ -1,8 +1,8 @@
 import os
 import pandas as pd
 
-input_csv = "/home/ouzx/ESE6740/dataset/UCBERKELEY_AMY_6MM_24Mar2026.csv"
-output_dir = "/home/ouzx/ESE6740/dataset/"
+input_csv = "./dataset/UCBERKELEY_AMY_6MM_24Mar2026.csv"
+output_dir = "./dataset/"
 os.makedirs(output_dir, exist_ok=True)
 
 PT_ID_COL = "PTID"
@@ -61,8 +61,8 @@ assert (mri_df[PT_ID_COL].values == pet_df[PT_ID_COL].values).all(), "TID mismat
 assert len(mri_final) == len(pet_final), "ROI count mismatch!"
 
 assert set([base_name(c, "_VOLUME") for c in mri_final]) == \
-       set([base_name(c, "_SUVR") for c in pet_final]), \
-       "ROI semantic mismatch!"
+    set([base_name(c, "_SUVR") for c in pet_final]), \
+    "ROI semantic mismatch!"
 
 mri_save = os.path.join(output_dir, "MRI_roi.csv")
 pet_save = os.path.join(output_dir, "PET_roi.csv")
