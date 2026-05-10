@@ -28,9 +28,11 @@ class ROIDataset(Dataset):
         pet_df,
         id_col="PTID",
         label_col="DX_bl",
+        gender_col="PTGENDER",
         mri_scaler=None,
         pet_scaler=None,
         label_encoder=None,
+        gender_encoder=None,
         fit=False
     ):
         self.id_col = id_col
@@ -39,8 +41,8 @@ class ROIDataset(Dataset):
         self.mri_cols = [c for c in mri_df.columns if "_VOLUME" in c.upper()]
         self.pet_cols = [c for c in pet_df.columns if "_SUVR" in c.upper()]
 
-        mri_df = mri_df[[id_col, label_col] + self.mri_cols].copy()
-        pet_df = pet_df[[id_col, label_col] + self.pet_cols].copy()
+        mri_df = mri_df[[id_col, label_col, gender_col] + self.mri_cols].copy()
+        pet_df = pet_df[[id_col, label_col, gender_col] + self.pet_cols].copy()
 
         mri_df = mri_df.sort_values(id_col).reset_index(drop=True)
         pet_df = pet_df.sort_values(id_col).reset_index(drop=True)
@@ -50,6 +52,7 @@ class ROIDataset(Dataset):
 
         self.ids = mri_df[id_col].values
         y_raw = mri_df[label_col].astype(str).values
+        y_gender_raw = mri_df[gender_col].astype(str).values
 
         if fit:
             self.label_encoder = LabelEncoder()
@@ -59,7 +62,16 @@ class ROIDataset(Dataset):
             self.label_encoder = label_encoder
             y = self.label_encoder.transform(y_raw)
 
+        if fit:
+            self.gender_encoder = LabelEncoder()
+            y_gender = self.gender_encoder.fit_transform(y_gender_raw)
+        else:
+            assert gender_encoder is not None, "Need gender_encoder for val/test"
+            self.gender_encoder = gender_encoder
+            y_gender = self.gender_encoder.transform(y_gender_raw)      
+
         self.y = y.astype(np.int64)
+        self.y_gender = y_gender.astype(np.int64)
 
         X_mri = mri_df[self.mri_cols].apply(pd.to_numeric, errors="coerce").values
         X_pet = pet_df[self.pet_cols].apply(pd.to_numeric, errors="coerce").values
@@ -94,5 +106,6 @@ class ROIDataset(Dataset):
         return (
             torch.tensor(self.X_mri[idx]),
             torch.tensor(self.X_pet[idx]),
-            torch.tensor(self.y[idx])
+            torch.tensor(self.y[idx]),
+            torch.tensor(self.y_gender[idx])
         )

@@ -10,7 +10,7 @@ from statsmodels.stats.multitest import multipletests
 
 
 MRI_PATH = "./dataset/PET_whole.csv"
-CHAR_PATH = "./results/subtype_analysis/subtype_with_bestK.csv"
+CHAR_PATH = "./results/subtype_analysis/test_subtype_with_bestK.csv"
 OUTPUT_DIR = "./results/subtype_analysis"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)

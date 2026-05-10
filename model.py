@@ -106,7 +106,7 @@ class Decoder(nn.Module):
         return self.net(z)
 
 class AE(nn.Module):
-    def __init__(self, num_rois, latent, dim, beta_mi, beta_ib, dropout_p, num_classes):
+    def __init__(self, num_rois, latent, dim, beta_mi, beta_ib, l1_lambda, beta_ib_gender, dropout_p, num_classes):
         super().__init__()
         self.encoder = Encoder(num_rois * 2, dim, latent, dropout_p=dropout_p)
         self.partition = LatentPartition(latent)
@@ -122,14 +122,22 @@ class AE(nn.Module):
             nn.Dropout(dropout_p),
             nn.Linear(dim//32, num_classes)
         )
+        self.cls_sub_gender = nn.Sequential(
+            nn.Linear(latent//32, dim//32),
+            nn.ReLU(),
+            nn.Dropout(dropout_p),
+            nn.Linear(dim//32, 2)
+        )
         self.pos_emb = ROIPositionalEncoding(num_rois=num_rois)
         
         self.beta_mi = beta_mi
         self.beta_ib = beta_ib
+        self.beta_ib_gender = beta_ib_gender
+        self.l1_lambda = l1_lambda
         self.register_buffer("prior_mean", torch.zeros(latent))
         self.register_buffer("prior_std", torch.ones(latent))
 
-    def forward(self, x_m, x_p, y):
+    def forward(self, x_m, x_p, y, y_gender):
         device = next(self.parameters()).device
         x_m, x_p = x_m.to(device), x_p.to(device)
 
@@ -151,17 +159,28 @@ class AE(nn.Module):
         
         loss_rec = (F.mse_loss(pred_m, x_m) + F.mse_loss(pred_p, x_p)) / 2
 
+        # disease classification
         cls_pred = self.cls_sub(z_sub)
         loss_cls = F.cross_entropy(cls_pred, y.long())
 
-        loss = loss_rec + self.beta_ib * loss_cls
+        # gender classification
+        cls_pred_gender = self.cls_sub_gender(z_sub)
+        loss_cls_gender = F.cross_entropy(cls_pred_gender, y_gender.long())
+
+        l1_loss = torch.mean(torch.abs(sub_pred_m)) + torch.mean(torch.abs(sub_pred_p))
+
+        loss = loss_rec + self.beta_ib * loss_cls + self.beta_ib_gender * loss_cls_gender + self.l1_lambda * l1_loss
 
         return {
             "loss": loss,
             "loss_cls": loss_cls,
             "loss_rec": loss_rec,
+            "loss_l1": l1_loss,
+            "loss_cls_gender": loss_cls_gender,
             "z_sub": z_sub,
             "z_mod": z_mod,
+            "sub_pred_m":sub_pred_m,
+            "sub_pred_p":sub_pred_p,
             "latent": latent,
             "reconstruction_m": pred_m,
             "reconstruction_p": pred_p,
