@@ -73,7 +73,7 @@ def train_model(
     val_dataset,
     device,
     epochs=2000,
-    lr=1e-4,
+    lr=5e-4,
     club_lr=None,
     lambda_apoe = 0.5,
     lambda_age = 0.05,
@@ -459,6 +459,29 @@ def train_model(
                 f"Adv-active {ep >= adv_warmup_epochs} | "
             )
 
+    history = {
+        "train_objective_losses": train_objective_losses,
+        "train_ae_losses": train_ae_losses,
+        "rec_mri_losses": rec_mri_losses,
+        "rec_pet_losses": rec_pet_losses,
+        "rec_losses": rec_losses,
+        "cls_losses": cls_losses,
+        "val_losses": val_losses,
+        "mi_losses": mi_losses,
+        "mi_estimates": mi_estimates,
+        "mi_penalties": mi_penalties,
+        "adv_losses": adv_losses,
+        "probe_losses": probe_losses,
+        "mod_entropies": mod_entropies,
+        "train_zs_accs": train_zs_accs,
+        "train_zm_accs": train_zm_accs,
+        "val_zs_accs": val_zs_accs,
+        "val_zm_accs": val_zm_accs,
+    }
+    history_path = os.path.join(os.path.dirname(plot_path), "training_history.pkl")
+    with open(history_path, "wb") as f:
+        pickle.dump(history, f)
+
     return best_val_loss, best_model
 
 
@@ -551,8 +574,8 @@ if __name__ == "__main__":
     # lambda_apoe = 0.25
     # lambda_age = 0.05
     # lambda_apoe = 0.5
-    lambda_apoe = 0.5
-    lambda_age = 0.00
+    lambda_apoe = 0.0
+    lambda_age = 0.5
     print(f"Detected num_rois = {num_rois}")
     print(f"Label classes = {list(label_encoder.classes_)}")
     print(f"Subtype latent dim = {subtype_dim}")
@@ -562,9 +585,9 @@ if __name__ == "__main__":
         latent=latent,
         dim=512,
         subtype_dim=subtype_dim,
-        beta_mi=1.0,   
-        beta_ib=2.0,
-        dropout_p=0.0,
+        beta_mi=0.2,   
+        beta_ib=0.3,
+        dropout_p=0.1,
         num_classes=len(label_encoder.classes_),
     )
 
@@ -578,19 +601,19 @@ if __name__ == "__main__":
         train_dataset,
         val_dataset,
         device,
-        epochs = 250,
-        lr=5e-3,
+        epochs = 400,
+        lr=5e-4,
         club_lr=1e-5,
         probe_lr=1e-3,
         batch_size=512,
         club_steps=5,
         lambda_apoe = lambda_apoe,
         lambda_age = lambda_age,
-        club_warmup_epochs=20,
-        adv_warmup_epochs=20,
+        club_warmup_epochs=50,
+        adv_warmup_epochs=50,
         adv_weight=5e-2,
         normalize_club_latents=True,
-        print_acc_every=20,
+        print_acc_every=50,
         plot_path=os.path.join(results_dir, "loss_curve.png"),
     )
     torch.save(best_model, os.path.join(results_dir, "best.pth"))
